@@ -1,7 +1,6 @@
 import os
 
 import streamlit as st
-from dotenv import load_dotenv
 
 
 @st.cache_resource
@@ -11,6 +10,7 @@ def get_session():
 
         return get_active_session()
     except Exception:
+        from dotenv import load_dotenv
         from snowflake.snowpark import Session
 
         load_dotenv()
