@@ -1,0 +1,115 @@
+# Cursor Rules — Urban Vitality Index (Streamlit + Snowflake)
+
+## Project Context
+Streamlit dashboard for Seoul urban vitality analysis. Data lives in Snowflake (SPH_DATA.GRANDATA). Korean-facing UI. Entry point: `I47AIC5MZ97CF0P5/streamlit_app.py`.
+
+## Design System Tokens
+
+### Colors
+```
+/* Cool Neutral */
+--color-neutral-10: #ffffff
+--color-neutral-20: #f7f7f8
+--color-neutral-30: #dbdcdf
+--color-neutral-40: #989ba2
+--color-neutral-50: #70737c
+--color-neutral-60: #5a5c63
+--color-neutral-70: #292a2d
+--color-neutral-80: #171719
+--color-neutral-90: #0f0f10
+--color-neutral-100: #000000
+
+/* Primary Blue */
+--color-primary-10: #e3effa
+--color-primary-20: #cae4fa
+--color-primary-30: #98ccfa
+--color-primary-40: #359efa   ← main accent / CTA
+--color-primary-50: #1a4e7c
+--color-primary-60: #0f2c45
+
+/* Success Green */
+--color-secondary-10: #c9e1b6
+--color-secondary-20: #b0e189
+--color-secondary-30: #96e15c
+--color-secondary-40: #7de12f  ← positive trend
+--color-secondary-50: #62ad24
+--color-secondary-60: #457a19
+
+/* Error Red */
+--color-error-10: #ffebeb
+--color-error-20: #ffd1d1
+--color-error-30: #ffb8b8
+--color-error-40: #ff8585
+--color-error-50: #ff5252     ← negative trend
+--color-error-60: #993131
+```
+
+### Typography
+```
+heading1: 28px / 132% line-height
+heading2: 24px / 132%
+heading3: 20px / 132%
+body1:    18px / 150%
+body2:    16px / 150%
+body3:    14px / 150%
+caption:  12px
+action:   12px
+
+font-weight-bold:      700
+font-weight-semibold:  600
+font-weight-medium:    500
+font-weight-regular:   400
+```
+
+### Semantic Color Usage
+| Context | Token | Hex |
+|---------|-------|-----|
+| Page background | neutral-90 | #0f0f10 |
+| Card / surface | neutral-80 | #171719 |
+| Divider / border | neutral-70 | #292a2d |
+| Disabled / muted text | neutral-40 | #989ba2 |
+| Body text | neutral-10 | #ffffff |
+| Primary action / link | primary-40 | #359efa |
+| Positive / up trend | secondary-40 | #7de12f |
+| Negative / down trend | error-50 | #ff5252 |
+
+## Streamlit Coding Rules
+
+1. **CSS injection** — inject design tokens as CSS variables once at app startup:
+   ```python
+   st.markdown("""
+   <style>
+   :root {
+     --color-primary-40: #359efa;
+     /* ... */
+   }
+   </style>
+   """, unsafe_allow_html=True)
+   ```
+
+2. **Caching** — always use `@st.cache_data(ttl=...)` for Snowflake queries.
+
+3. **Session** — use `get_session()` from `vitality_app.session`. Never create a new session.
+
+4. **Tab structure** — each tab is a module with a single `render(...)` function. Don't add logic to `streamlit_app.py`.
+
+5. **State passing** — use dataclasses (like `SidebarState`) to pass state between components. Don't use `st.session_state` for derived data.
+
+6. **Language** — UI labels and messages in Korean. Code (variables, functions, comments) in English.
+
+7. **Charts** — use Altair for statistical charts, Pydeck for maps. Match chart colors to design tokens.
+
+8. **No magic numbers** — reference design token names in comments when using hex colors in Python.
+
+## File Structure
+```
+I47AIC5MZ97CF0P5/
+├── streamlit_app.py         # Entry point only — no business logic here
+├── .streamlit/config.toml   # Theme configuration
+├── vitality_app/
+│   ├── data.py              # Snowflake queries (cached)
+│   ├── indices.py           # Index computation
+│   ├── session.py           # Snowflake session singleton
+│   ├── sidebar.py           # Sidebar UI
+│   └── tabs/                # One module per tab
+```

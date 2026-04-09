@@ -26,8 +26,19 @@ class SidebarState:
 
 
 def render_sidebar() -> Optional[SidebarState]:
-    st.sidebar.title("🏙️ Urban Vitality Index")
-    st.sidebar.markdown("서울 도시 활력 분석 플랫폼")
+    if "dark_mode" not in st.session_state:
+        st.session_state.dark_mode = False
+
+    col_title, col_toggle = st.sidebar.columns([3, 1])
+    with col_title:
+        st.markdown("### 🏙️ Urban Vitality Index")
+    with col_toggle:
+        st.toggle(":material/dark_mode:", value=st.session_state.dark_mode, key="dark_mode")
+
+    st.sidebar.markdown(
+        "<p style='margin-top:-8px;font-size:12px;color:var(--color-neutral-40)'>서울 도시 활력 분석 플랫폼</p>",
+        unsafe_allow_html=True,
+    )
     st.sidebar.divider()
 
     city_df = data.load_available_cities()
