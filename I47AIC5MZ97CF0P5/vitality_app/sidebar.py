@@ -1,99 +1,200 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Optional
-
-import pandas as pd
 import streamlit as st
 
-from vitality_app import data
+from vitality_app.i18n import nav_label, t
+
+TAB_KEYS = ["visitor", "consumer", "asset", "report", "backtest", "diagnostic"]
+
+_SIDEBAR_CSS = """
+<style>
+/* ── shrink sidebar top padding so title sits close to header ── */
+div[data-testid="stSidebarHeader"] {
+    padding: 0.25rem 1rem !important;
+}
+[data-testid="stSidebarUserContent"] {
+    padding-top: 0.5rem !important;
+}
+
+/* ── theme + locale row: even spacing between moon / En / Ko ── */
+section[data-testid="stSidebar"] [data-testid="stHorizontalBlock"]:first-of-type {
+    gap: 0.5rem !important;
+}
+
+/* ── sidebar nav: full-width row highlight + full-row click (label fills container) ── */
+section[data-testid="stSidebar"] .block-container {
+    max-width: 100% !important;
+}
+section[data-testid="stSidebar"] div[data-testid="element-container"]:has([data-testid="stRadio"]) {
+    width: 100% !important;
+    max-width: 100% !important;
+}
+section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"]:has([data-testid="stRadio"]),
+section[data-testid="stSidebar"] div[data-testid="stVerticalBlock"]:has([data-testid="stRadio"]) {
+    width: 100% !important;
+    max-width: 100% !important;
+}
+section[data-testid="stSidebar"] div[data-testid="stRadio"] {
+    width: 100% !important;
+    max-width: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+}
+section[data-testid="stSidebar"] div[data-testid="stRadio"] > div {
+    width: 100% !important;
+    max-width: 100% !important;
+    align-self: stretch !important;
+}
+/* RadioGroup: modern Streamlit uses data-testid="stRadioGroup" (Base Web); older builds use role="radiogroup" */
+section[data-testid="stSidebar"] div[data-testid="stRadio"] [data-testid="stRadioGroup"],
+section[data-testid="stSidebar"] div[data-testid="stRadio"] div[role="radiogroup"] {
+    gap: 4px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+}
+section[data-testid="stSidebar"] div[data-testid="stRadio"] [data-testid="stRadioGroup"] label,
+section[data-testid="stSidebar"] div[data-testid="stRadio"] div[role="radiogroup"] > label {
+    background-color: transparent;
+    border-radius: 8px;
+    padding: 10px 14px !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 100% !important;
+    align-self: stretch !important;
+    display: flex !important;
+    flex: 1 1 auto !important;
+    box-sizing: border-box !important;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+    justify-content: center !important;
+    align-items: center !important;
+    text-align: center !important;
+    position: relative !important;
+}
+section[data-testid="stSidebar"] div[data-testid="stRadio"] [data-testid="stRadioGroup"] label:hover,
+section[data-testid="stSidebar"] div[data-testid="stRadio"] div[role="radiogroup"] > label:hover {
+    background-color: rgba(53, 158, 250, 0.10);
+}
+/* Selected row: Base Web does not set data-checked; use :has(input:checked) */
+section[data-testid="stSidebar"] div[data-testid="stRadio"] [data-testid="stRadioGroup"] label:has(input[type="radio"]:checked),
+section[data-testid="stSidebar"] div[data-testid="stRadio"] div[role="radiogroup"] > label[data-checked="true"],
+section[data-testid="stSidebar"] div[data-testid="stRadio"] div[role="radiogroup"] > label:has(input[type="radio"]:checked) {
+    background-color: #359efa !important;
+}
+section[data-testid="stSidebar"] div[data-testid="stRadio"] [data-testid="stRadioGroup"] label:has(input[type="radio"]:checked) p,
+section[data-testid="stSidebar"] div[data-testid="stRadio"] [data-testid="stRadioGroup"] label:has(input[type="radio"]:checked) span,
+section[data-testid="stSidebar"] div[data-testid="stRadio"] div[role="radiogroup"] > label[data-checked="true"] p,
+section[data-testid="stSidebar"] div[data-testid="stRadio"] div[role="radiogroup"] > label[data-checked="true"] span,
+section[data-testid="stSidebar"] div[data-testid="stRadio"] div[role="radiogroup"] > label:has(input[type="radio"]:checked) p,
+section[data-testid="stSidebar"] div[data-testid="stRadio"] div[role="radiogroup"] > label:has(input[type="radio"]:checked) span {
+    color: #ffffff !important;
+    font-weight: 600 !important;
+}
+section[data-testid="stSidebar"] div[data-testid="stRadio"] [data-testid="stRadioGroup"] label p,
+section[data-testid="stSidebar"] div[data-testid="stRadio"] div[role="radiogroup"] > label p {
+    font-size: 15px !important;
+    color: #989ba2 !important;
+    font-weight: 500 !important;
+    text-align: center !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+}
+/* Hide default radio knob; row background shows selection (input stays for :checked / a11y) */
+section[data-testid="stSidebar"] div[data-testid="stRadio"] [data-testid="stRadioGroup"] label input[type="radio"] + div,
+section[data-testid="stSidebar"] div[data-testid="stRadio"] div[role="radiogroup"] > label > div:first-child {
+    display: none !important;
+}
+section[data-testid="stSidebar"] div[data-testid="stRadio"] [data-testid="stRadioGroup"] label > div,
+section[data-testid="stSidebar"] div[data-testid="stRadio"] div[role="radiogroup"] > label > div {
+    flex: 0 1 auto !important;
+    width: auto !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    text-align: center !important;
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+    justify-content: center !important;
+    align-items: center !important;
+    gap: 0.35em !important;
+}
+section[data-testid="stSidebar"] div[data-testid="stRadio"] [data-testid="stRadioGroup"] label input[type="radio"],
+section[data-testid="stSidebar"] div[data-testid="stRadio"] div[role="radiogroup"] > label input[type="radio"] {
+    position: absolute !important;
+    opacity: 0 !important;
+    width: 0 !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    pointer-events: none !important;
+}
+</style>
+"""
 
 
-@dataclass
-class SidebarState:
-    selected_cities: list
-    city_code_to_name: dict
-    selected_month: str
-    df: pd.DataFrame
-    geo_df: pd.DataFrame
-    months: list
-    w_pop: int
-    w_visit: int
-    w_cons: int
-    w_div: int
-    w_inc: int
-    w_cred: int
-
-
-def render_sidebar() -> Optional[SidebarState]:
+def render_sidebar() -> str:
+    st.session_state.setdefault("locale", "ko")
     if "dark_mode" not in st.session_state:
         st.session_state.dark_mode = False
 
-    col_title, col_toggle = st.sidebar.columns([3, 1])
-    with col_title:
-        st.markdown("### 🏙️ Urban Vitality Index")
-    with col_toggle:
-        st.toggle(":material/dark_mode:", value=st.session_state.dark_mode, key="dark_mode")
+    st.sidebar.markdown(_SIDEBAR_CSS, unsafe_allow_html=True)
 
+    icon = "\u2600\ufe0f" if st.session_state.dark_mode else "\U0001f319"
+    loc = st.session_state.get("locale", "ko")
+
+    c_theme, c_en, c_ko = st.sidebar.columns(3)
+    with c_theme:
+        if st.button(
+            icon,
+            key="theme_toggle",
+            use_container_width=True,
+        ):
+            st.session_state.dark_mode = not st.session_state.dark_mode
+            st.rerun()
+    with c_en:
+        if st.button(
+            "En",
+            key="locale_en",
+            use_container_width=True,
+            type="primary" if loc == "en" else "secondary",
+        ):
+            if loc != "en":
+                st.session_state.locale = "en"
+                st.rerun()
+    with c_ko:
+        if st.button(
+            "Ko",
+            key="locale_ko",
+            use_container_width=True,
+            type="primary" if loc == "ko" else "secondary",
+        ):
+            if loc != "ko":
+                st.session_state.locale = "ko"
+                st.rerun()
+
+    st.sidebar.markdown(t("sidebar.title"))
     st.sidebar.markdown(
-        "<p style='margin-top:-8px;font-size:12px;color:var(--color-neutral-40)'>서울 도시 활력 분석 플랫폼</p>",
+        f"<p style='margin-top:-8px;font-size:12px;color:var(--color-neutral-40)'>{t('sidebar.tagline')}</p>",
         unsafe_allow_html=True,
     )
     st.sidebar.divider()
 
-    city_df = data.load_available_cities()
-    city_code_to_name = city_df.set_index("CITY_CODE")["CITY_KOR_NAME"].to_dict()
-
-    selected_cities = st.sidebar.multiselect(
-        "🏙️ 분석할 구 선택",
-        options=city_df["CITY_CODE"].tolist(),
-        default=city_df["CITY_CODE"].tolist(),
-        format_func=lambda x: city_code_to_name.get(x, x),
+    selected_key = st.sidebar.radio(
+        "menu",
+        TAB_KEYS,
+        format_func=nav_label,
+        label_visibility="collapsed",
     )
 
-    if not selected_cities:
-        st.warning("분석할 구를 하나 이상 선택하세요.")
-        return None
+    return selected_key
 
-    df = data.load_vitality_data(tuple(selected_cities))
-    geo_df = data.load_geo_data(tuple(selected_cities))
-    months = sorted(df["STANDARD_YEAR_MONTH"].unique())
 
+def render_footer() -> None:
     st.sidebar.divider()
-
-    selected_month = st.sidebar.select_slider(
-        "📅 분석 기간",
-        options=months,
-        value=months[-1],
-        format_func=lambda x: f"{x[:4]}년 {x[4:]}월",
-    )
-
-    st.sidebar.divider()
-    st.sidebar.subheader("⚖️ 지수 가중치 조정")
-    w_pop = st.sidebar.slider("유동인구", 0, 100, 15, 5)
-    w_visit = st.sidebar.slider("방문인구 비율", 0, 100, 15, 5)
-    w_cons = st.sidebar.slider("소비 규모", 0, 100, 20, 5)
-    w_div = st.sidebar.slider("소비 다양성", 0, 100, 10, 5)
-    w_inc = st.sidebar.slider("소득 수준", 0, 100, 20, 5)
-    w_cred = st.sidebar.slider("신용 건전성", 0, 100, 20, 5)
-
-    return SidebarState(
-        selected_cities=selected_cities,
-        city_code_to_name=city_code_to_name,
-        selected_month=selected_month,
-        df=df,
-        geo_df=geo_df,
-        months=months,
-        w_pop=w_pop,
-        w_visit=w_visit,
-        w_cons=w_cons,
-        w_div=w_div,
-        w_inc=w_inc,
-        w_cred=w_cred,
-    )
-
-
-def render_footer():
-    st.sidebar.divider()
-    st.sidebar.caption("Built with Snowflake + Streamlit")
-    st.sidebar.caption("Data: SPH (SKT 유동인구, KCB 자산소득, 신한카드 소비)")
+    st.sidebar.caption(t("footer.built"))
+    st.sidebar.caption(t("footer.data"))

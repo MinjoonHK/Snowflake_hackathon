@@ -1,4 +1,4 @@
-"""구경꾼 동네 분석 탭 — 방문↑ 소비↓ 통과 동네 탐지 (지하철 승하차 검증)"""
+"""Visitor-dominant neighborhood analysis — high visit / low spend pass-through detection."""
 from __future__ import annotations
 
 import altair as alt
@@ -6,19 +6,23 @@ import pandas as pd
 import streamlit as st
 
 from vitality_app import data
+from vitality_app.i18n import quadrants, t
 
 # ── Design system colors ─────────────────────────────────────────────────────
-_C_SPECTATOR = "#ff5252"   # error-50       — 구경꾼 동네
-_C_ACTIVE    = "#7de12f"   # secondary-40   — 활성 상권
-_C_LOCAL     = "#359efa"   # primary-40     — 지역 소비
-_C_STAGNANT  = "#989ba2"   # neutral-40     — 침체 동네
+_C_SPECTATOR = "#ff5252"   # error-50
+_C_ACTIVE    = "#7de12f"   # secondary-40
+_C_LOCAL     = "#359efa"   # primary-40
+_C_STAGNANT  = "#989ba2"   # neutral-40
 
-_QUAD_COLORS = {
-    "구경꾼 동네": _C_SPECTATOR,
-    "활성 상권":   _C_ACTIVE,
-    "지역 소비":   _C_LOCAL,
-    "침체 동네":   _C_STAGNANT,
-}
+
+def _quad_colors() -> dict[str, str]:
+    q = quadrants()
+    return {
+        q["spectator"]: _C_SPECTATOR,
+        q["active"]:    _C_ACTIVE,
+        q["local"]:     _C_LOCAL,
+        q["stagnant"]:  _C_STAGNANT,
+    }
 
 
 def _apply_theme(chart, dark: bool):
@@ -43,46 +47,40 @@ def _apply_theme(chart, dark: bool):
 
 def _classify_quadrant(score_visit: float, score_cons: float,
                         visit_med: float, cons_med: float) -> str:
+    q = quadrants()
     high_visit = score_visit >= visit_med
     high_cons  = score_cons  >= cons_med
     if high_visit and not high_cons:
-        return "구경꾼 동네"
+        return q["spectator"]
     if high_visit and high_cons:
-        return "활성 상권"
+        return q["active"]
     if not high_visit and high_cons:
-        return "지역 소비"
-    return "침체 동네"
+        return q["local"]
+    return q["stagnant"]
 
 
 def render(city_codes: tuple, city_code_to_name: dict, selected_month: str, dark_mode: bool = True):
-    st.header("구경꾼 동네 분석")
+    st.header(t("visitor.header"))
     st.markdown(
-        "<p style='color:#989ba2;font-size:14px;margin-top:-12px'>"
-        "방문인구는 많지만 카드 소비가 낮은 '통과 동네'를 탐지합니다. "
-        "지하철 승하차 데이터로 진짜 통과 동네 여부를 검증합니다."
-        "</p>",
+        f"<p style='color:#989ba2;font-size:14px;margin-top:-12px'>{t('visitor.intro')}</p>",
         unsafe_allow_html=True,
     )
 
     df_all = data.load_visitor_data(city_codes)
     if df_all.empty:
-        st.warning("데이터가 없습니다.")
+        st.warning(t("common.no_data"))
         return
 
     df = df_all[df_all["STANDARD_YEAR_MONTH"] == selected_month].copy()
     if df.empty:
-        st.warning("선택한 기간에 데이터가 없습니다.")
+        st.warning(t("common.no_data_period"))
         return
 
-    # ── 백분위 정규화 (SCORE 컬럼 간 스케일 불일치 보정) ──────────────────────
-    # SCORE_VISITING: 0~100 스케일 / SCORE_CONSUMPTION: 0~76 but 중앙값 0.1로 편향
-    # → 둘 다 백분위 순위(0~100)로 통일
     n = len(df)
     df["PCT_VISITING"]    = df["SCORE_VISITING"].rank(method="average") / n * 100
     df["PCT_CONSUMPTION"] = df["SCORE_CONSUMPTION"].rank(method="average") / n * 100
 
-    # ── 사분면 분류 ──────────────────────────────────────────────────────────
-    visit_med = 50.0   # 백분위 기준 중앙값은 항상 50
+    visit_med = 50.0
     cons_med  = 50.0
     df["QUADRANT"] = df.apply(
         lambda r: _classify_quadrant(
@@ -92,52 +90,61 @@ def render(city_codes: tuple, city_code_to_name: dict, selected_month: str, dark
     )
     df["LABEL"] = df["CITY_KOR_NAME"] + " " + df["DISTRICT_KOR_NAME"]
 
-    spectators = df[df["QUADRANT"] == "구경꾼 동네"]
+    q = quadrants()
+    qcolors = _quad_colors()
+
+    spectators = df[df["QUADRANT"] == q["spectator"]]
     ridership_med = spectators["TOTAL_RIDERSHIP"].median() if not spectators.empty else 0
     confirmed = spectators[spectators["TOTAL_RIDERSHIP"] > ridership_med]
 
-    # ── KPI 카드 ─────────────────────────────────────────────────────────────
+    # ── KPI cards ────────────────────────────────────────────────────────────
     kpi1, kpi2, kpi3, kpi4 = st.columns(4)
-    kpi1.metric("구경꾼 동네 수",  f"{len(spectators)}개 동", f"전체 {len(df)}개 동 중")
-    kpi2.metric("통과 동네 확정",  f"{len(confirmed)}개 동",  "지하철 승하차 상위 50%")
-    kpi3.metric("방문 백분위 기준", "50.0",                   "중앙값 기준 사분면")
-    kpi4.metric("소비 백분위 기준", "50.0",                   "중앙값 기준 사분면")
+    kpi1.metric(
+        t("visitor.kpi_spectator"),
+        f"{len(spectators)}",
+        t("visitor.kpi_spectator_total", total=len(df)),
+    )
+    kpi2.metric(t("visitor.kpi_passthrough"), f"{len(confirmed)}", t("visitor.kpi_passthrough_desc"))
+    kpi3.metric(t("visitor.kpi_visit_pct"), "50.0", t("visitor.kpi_median_quadrant"))
+    kpi4.metric(t("visitor.kpi_spend_pct"), "50.0", t("visitor.kpi_median_quadrant"))
 
     st.divider()
 
-    # ── 사분면 산점도 ─────────────────────────────────────────────────────────
-    st.subheader("방문 vs 소비 사분면 분석")
+    # ── Quadrant scatter ─────────────────────────────────────────────────────
+    st.subheader(t("visitor.quad_header"))
+
+    _type = t("c.type")
 
     color_scale = alt.Scale(
-        domain=list(_QUAD_COLORS.keys()),
-        range=list(_QUAD_COLORS.values()),
+        domain=list(qcolors.keys()),
+        range=list(qcolors.values()),
     )
 
     quad_labels = pd.DataFrame([
-        {"lx": 75, "ly": 25, "text": "구경꾼 동네 🚇"},
-        {"lx": 75, "ly": 75, "text": "활성 상권 ✨"},
-        {"lx": 25, "ly": 75, "text": "지역 소비 🏘️"},
-        {"lx": 25, "ly": 25, "text": "침체 동네 💤"},
+        {"lx": 75, "ly": 25, "text": f"{q['spectator']} 🚇"},
+        {"lx": 75, "ly": 75, "text": f"{q['active']} ✨"},
+        {"lx": 25, "ly": 75, "text": f"{q['local']} 🏘️"},
+        {"lx": 25, "ly": 25, "text": f"{q['stagnant']} 💤"},
     ])
 
     scatter = (
         alt.Chart(df)
         .mark_circle(opacity=0.8)
         .encode(
-            x=alt.X("PCT_VISITING:Q",    title="방문 백분위",
+            x=alt.X("PCT_VISITING:Q", title=t("visitor.axis_visit_pct"),
                     scale=alt.Scale(domain=[0, 100])),
-            y=alt.Y("PCT_CONSUMPTION:Q", title="소비 백분위",
+            y=alt.Y("PCT_CONSUMPTION:Q", title=t("visitor.axis_spend_pct"),
                     scale=alt.Scale(domain=[0, 100])),
-            color=alt.Color("QUADRANT:N", title="유형", scale=color_scale),
-            size=alt.Size("TOTAL_RIDERSHIP:Q", title="지하철 승하차",
+            color=alt.Color("QUADRANT:N", title=_type, scale=color_scale),
+            size=alt.Size("TOTAL_RIDERSHIP:Q", title=t("visitor.legend_subway"),
                           scale=alt.Scale(range=[40, 500])),
             tooltip=[
-                alt.Tooltip("LABEL:N",             title="법정동"),
-                alt.Tooltip("QUADRANT:N",           title="유형"),
-                alt.Tooltip("PCT_VISITING:Q",       title="방문 백분위",   format=".1f"),
-                alt.Tooltip("PCT_CONSUMPTION:Q",    title="소비 백분위",   format=".1f"),
-                alt.Tooltip("TOTAL_RIDERSHIP:Q",    title="지하철 승하차", format=","),
-                alt.Tooltip("STATION_CNT:Q",        title="인근 역 수"),
+                alt.Tooltip("LABEL:N",             title=t("c.district")),
+                alt.Tooltip("QUADRANT:N",           title=_type),
+                alt.Tooltip("PCT_VISITING:Q",       title=t("visitor.axis_visit_pct"),   format=".1f"),
+                alt.Tooltip("PCT_CONSUMPTION:Q",    title=t("visitor.axis_spend_pct"),   format=".1f"),
+                alt.Tooltip("TOTAL_RIDERSHIP:Q",    title=t("visitor.tooltip_ridership"), format=","),
+                alt.Tooltip("STATION_CNT:Q",        title=t("visitor.tooltip_station")),
             ],
         )
     )
@@ -166,41 +173,46 @@ def render(city_codes: tuple, city_code_to_name: dict, selected_month: str, dark
         dark_mode,
     )
     st.altair_chart(chart, use_container_width=True)
-    st.caption("점 크기 = 지하철 총 승하차 수 | 기준선: 백분위 50 (중앙값)")
+    st.caption(t("visitor.caption_scatter"))
 
     st.divider()
 
-    # ── 구경꾼 동네 상세 랭킹 ─────────────────────────────────────────────────
-    st.subheader("구경꾼 동네 상세 목록")
+    # ── Spectator zone detail list ───────────────────────────────────────────
+    st.subheader(t("visitor.list_header"))
 
     if spectators.empty:
-        st.info("이번 달 구경꾼 동네로 분류된 법정동이 없습니다.")
+        st.info(t("visitor.no_spectator"))
     else:
         spec = spectators.copy()
-        spec["백분위_갭"] = (spec["PCT_VISITING"] - spec["PCT_CONSUMPTION"]).round(1)
-        spec["통과동네"] = spec["TOTAL_RIDERSHIP"].apply(
-            lambda x: "✅ 통과 동네" if x > ridership_med else "△ 주의"
+        _gap_col = t("visitor.col_pct_gap")
+        _pt_col = t("visitor.col_passthrough")
+        spec[_gap_col] = (spec["PCT_VISITING"] - spec["PCT_CONSUMPTION"]).round(1)
+        spec[_pt_col] = spec["TOTAL_RIDERSHIP"].apply(
+            lambda x: t("visitor.passthrough_yes") if x > ridership_med else t("visitor.passthrough_no")
         )
         display = spec[[
             "CITY_KOR_NAME", "DISTRICT_KOR_NAME",
-            "PCT_VISITING", "PCT_CONSUMPTION", "백분위_갭",
+            "PCT_VISITING", "PCT_CONSUMPTION", _gap_col,
             "TOTAL_VISITING", "TOTAL_CARD_SALES",
-            "STATION_CNT", "MIN_DISTANCE", "TOTAL_RIDERSHIP", "통과동네",
-        ]].sort_values("백분위_갭", ascending=False).reset_index(drop=True)
+            "STATION_CNT", "MIN_DISTANCE", "TOTAL_RIDERSHIP", _pt_col,
+        ]].sort_values(_gap_col, ascending=False).reset_index(drop=True)
         display.index += 1
         display.columns = [
-            "구", "동", "방문백분위", "소비백분위", "갭",
-            "방문인구", "카드매출", "인근역수", "최근역거리(m)", "지하철승하차", "통과동네",
+            t("c.gu"), t("c.dong"),
+            t("visitor.col_visit_pct"), t("visitor.col_spend_pct"), t("visitor.col_gap"),
+            t("visitor.col_visitors"), t("visitor.col_sales"),
+            t("visitor.col_stations"), t("visitor.col_distance"),
+            t("visitor.col_ridership"), t("visitor.col_passthrough"),
         ]
         st.dataframe(display, use_container_width=True, height=400)
 
     st.divider()
 
-    # ── 지하철 승하차 vs 소비 ────────────────────────────────────────────────
-    st.subheader("지하철 승하차 vs 카드 소비")
+    # ── Subway ridership vs card spend ───────────────────────────────────────
+    st.subheader(t("visitor.subway_header"))
     st.markdown(
-        "<p style='color:#989ba2;font-size:13px;margin-top:-10px'>"
-        "승하차↑ + 소비↓ → 진짜 통과 동네 | 버블 색상 = 동네 유형</p>",
+        f"<p style='color:#989ba2;font-size:13px;margin-top:-10px'>"
+        f"{t('visitor.subway_desc')}</p>",
         unsafe_allow_html=True,
     )
 
@@ -210,17 +222,17 @@ def render(city_codes: tuple, city_code_to_name: dict, selected_month: str, dark
             alt.Chart(df_transit)
             .mark_circle(size=70, opacity=0.8)
             .encode(
-                x=alt.X("TOTAL_RIDERSHIP:Q", title="지하철 총 승하차수",
+                x=alt.X("TOTAL_RIDERSHIP:Q", title=t("visitor.axis_ridership"),
                         scale=alt.Scale(zero=False)),
-                y=alt.Y("TOTAL_CARD_SALES:Q", title="카드 총 매출",
+                y=alt.Y("TOTAL_CARD_SALES:Q", title=t("visitor.axis_card_sales"),
                         scale=alt.Scale(zero=False)),
-                color=alt.Color("QUADRANT:N", title="유형", scale=color_scale),
+                color=alt.Color("QUADRANT:N", title=_type, scale=color_scale),
                 tooltip=[
-                    alt.Tooltip("LABEL:N",             title="법정동"),
-                    alt.Tooltip("QUADRANT:N",           title="유형"),
-                    alt.Tooltip("TOTAL_RIDERSHIP:Q",   title="지하철 승하차", format=","),
-                    alt.Tooltip("TOTAL_CARD_SALES:Q",  title="카드 매출",    format=","),
-                    alt.Tooltip("STATION_CNT:Q",        title="인근 역 수"),
+                    alt.Tooltip("LABEL:N",             title=t("c.district")),
+                    alt.Tooltip("QUADRANT:N",           title=_type),
+                    alt.Tooltip("TOTAL_RIDERSHIP:Q",   title=t("visitor.tooltip_ridership"), format=","),
+                    alt.Tooltip("TOTAL_CARD_SALES:Q",  title=t("visitor.tooltip_card_sales"), format=","),
+                    alt.Tooltip("STATION_CNT:Q",        title=t("visitor.tooltip_station")),
                 ],
             )
             .properties(height=400)
@@ -229,12 +241,12 @@ def render(city_codes: tuple, city_code_to_name: dict, selected_month: str, dark
         )
         st.altair_chart(transit_chart, use_container_width=True)
     else:
-        st.info("지하철 데이터가 있는 법정동이 없습니다.")
+        st.info(t("visitor.no_subway"))
 
     st.divider()
 
-    # ── 구경꾼 동네 방문·소비 추이 ────────────────────────────────────────────
-    st.subheader("구경꾼 동네 방문·소비 추이")
+    # ── Spectator zone visit & spend trends ──────────────────────────────────
+    st.subheader(t("visitor.trend_header"))
 
     if not spectators.empty:
         top_codes = spectators.nlargest(5, "PCT_VISITING")["DISTRICT_CODE"].tolist()
@@ -243,7 +255,7 @@ def render(city_codes: tuple, city_code_to_name: dict, selected_month: str, dark
             for _, row in spectators.iterrows()
         }
         selected = st.multiselect(
-            "구경꾼 동네 선택 (최대 5개)",
+            t("visitor.select_spectator"),
             options=list(district_options.keys()),
             default=top_codes[:3],
             format_func=lambda x: district_options.get(x, x),
@@ -254,39 +266,46 @@ def render(city_codes: tuple, city_code_to_name: dict, selected_month: str, dark
             df_trend = df_all[df_all["DISTRICT_CODE"].isin(selected)].copy()
             df_trend["LABEL"] = df_trend["CITY_KOR_NAME"] + " " + df_trend["DISTRICT_KOR_NAME"]
 
+            _district = t("c.district")
+            _period = t("c.period")
+            _score = t("c.score")
+            _series = t("c.series")
+            _visit_score = t("visitor.visit_score")
+            _spend_score = t("visitor.spend_score")
+
             trend_rows = []
             for _, row in df_trend.iterrows():
                 trend_rows.append({
-                    "법정동": row["LABEL"], "기간": row["STANDARD_YEAR_MONTH"],
-                    "점수": row["SCORE_VISITING"],    "구분": "방문 점수",
+                    _district: row["LABEL"], _period: row["STANDARD_YEAR_MONTH"],
+                    _score: row["SCORE_VISITING"],    _series: _visit_score,
                 })
                 trend_rows.append({
-                    "법정동": row["LABEL"], "기간": row["STANDARD_YEAR_MONTH"],
-                    "점수": row["SCORE_CONSUMPTION"], "구분": "소비 점수",
+                    _district: row["LABEL"], _period: row["STANDARD_YEAR_MONTH"],
+                    _score: row["SCORE_CONSUMPTION"], _series: _spend_score,
                 })
             df_trend_long = pd.DataFrame(trend_rows)
-            x_ticks = df_trend_long["기간"].unique()[::6].tolist()
+            x_ticks = df_trend_long[_period].unique()[::6].tolist()
 
             trend_chart = _apply_theme(
                 alt.Chart(df_trend_long)
                 .mark_line(point=alt.OverlayMarkDef(size=50), strokeWidth=2)
                 .encode(
-                    x=alt.X("기간:N", title="기간",
+                    x=alt.X(f"{_period}:N", title=_period,
                             axis=alt.Axis(labelAngle=-45, values=x_ticks)),
-                    y=alt.Y("점수:Q", title="점수", scale=alt.Scale(zero=False)),
-                    color=alt.Color("법정동:N"),
+                    y=alt.Y(f"{_score}:Q", title=_score, scale=alt.Scale(zero=False)),
+                    color=alt.Color(f"{_district}:N"),
                     strokeDash=alt.StrokeDash(
-                        "구분:N",
+                        f"{_series}:N",
                         scale=alt.Scale(
-                            domain=["방문 점수", "소비 점수"],
+                            domain=[_visit_score, _spend_score],
                             range=[[1, 0], [6, 3]],
                         ),
                     ),
                     tooltip=[
-                        alt.Tooltip("법정동:N"),
-                        alt.Tooltip("기간:N"),
-                        alt.Tooltip("구분:N"),
-                        alt.Tooltip("점수:Q", format=".1f"),
+                        alt.Tooltip(f"{_district}:N"),
+                        alt.Tooltip(f"{_period}:N"),
+                        alt.Tooltip(f"{_series}:N"),
+                        alt.Tooltip(f"{_score}:Q", format=".1f"),
                     ],
                 )
                 .properties(height=380)
@@ -294,4 +313,4 @@ def render(city_codes: tuple, city_code_to_name: dict, selected_month: str, dark
                 dark_mode,
             )
             st.altair_chart(trend_chart, use_container_width=True)
-            st.caption("실선 = 방문 점수 / 점선 = 소비 점수 — 격차가 클수록 통과 동네 성격이 강함")
+            st.caption(t("visitor.caption_trend"))

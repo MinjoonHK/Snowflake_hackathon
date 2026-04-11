@@ -1,7 +1,4 @@
-"""소득 대비 소비 성향 탭
-아파트 시세(자산 수준 proxy) × 연령 구조 → 업종별 소비 패턴 비교
-데이터 가용 구: 중구·영등포구·서초구 3개 고정 비교
-"""
+"""Asset level × spending behavior tab."""
 from __future__ import annotations
 
 import numpy as np
@@ -10,9 +7,10 @@ import altair as alt
 import streamlit as st
 
 from vitality_app import data
+from vitality_app.i18n import categories, category_label, t
 
-# 아파트 시세 데이터가 있는 3개 구 (고정)
-_APT_CITY_CODES = ("11140", "11560", "11650")  # 중구, 영등포구, 서초구
+# Fixed 3 districts with apt price data
+_APT_CITY_CODES = ("11140", "11560", "11650")  # Jung, Yeongdeungpo, Seocho
 
 _CITY_COLORS = {
     "중구":    "#359efa",
@@ -20,17 +18,8 @@ _CITY_COLORS = {
     "서초구":  "#ff9f40",
 }
 
-_CATEGORIES: dict[str, str] = {
-    "COFFEE_SALES":        "커피",
-    "ENTERTAINMENT_SALES": "엔터테인먼트",
-    "FOOD_SALES":          "음식",
-    "FASHION_SALES":       "패션",
-    "LEISURE_SALES":       "여가",
-    "SMALL_RETAIL_SALES":  "소매",
-}
 
-
-# ── 테마 헬퍼 ────────────────────────────────────────────────────────────────
+# ── Theme helper ────────────────────────────────────────────────────────────
 def _apply_theme(chart, dark: bool):
     bg    = "#171719" if dark else "#ffffff"
     grid  = "#292a2d" if dark else "#dbdcdf"
@@ -51,7 +40,7 @@ def _apply_theme(chart, dark: bool):
     )
 
 
-# ── 집계 헬퍼 ────────────────────────────────────────────────────────────────
+# ── Aggregation helpers ─────────────────────────────────────────────────────
 def _agg_vitality_to_city(df: pd.DataFrame) -> pd.DataFrame:
     return (
         df.groupby(["STANDARD_YEAR_MONTH", "CITY_CODE", "CITY_KOR_NAME"])
@@ -69,44 +58,42 @@ def _agg_vitality_to_city(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _add_consumption_share(df: pd.DataFrame) -> pd.DataFrame:
-    """각 업종 비중(%) 컬럼 추가"""
     df = df.copy()
     total = df["TOTAL_CARD_SALES"].replace(0, np.nan)
-    for col, label in _CATEGORIES.items():
+    _CATS = categories()
+    for col in _CATS:
         df[f"{col}_SHARE"] = df[col] / total * 100
     return df
 
 
-# ── 메인 렌더 ────────────────────────────────────────────────────────────────
+# ── Main render ─────────────────────────────────────────────────────────────
 def render(
     city_codes: tuple,
     city_code_to_name: dict,
     selected_month: str,
     dark_mode: bool = True,
 ) -> None:
-    st.header("자산 수준 × 소비 성향 분석")
+    st.header(t("asset.header"))
     st.markdown(
-        "<p style='color:#989ba2;font-size:14px;margin-top:-12px'>"
-        "아파트 시세(자산 수준 proxy)와 연령 구조가 업종별 소비 패턴에 어떻게 반영되는지 분석합니다. "
-        "데이터 가용 구: <b style='color:#ffffff'>중구 · 영등포구 · 서초구</b></p>",
+        f"<p style='color:#989ba2;font-size:14px;margin-top:-12px'>{t('asset.intro_html')}</p>",
         unsafe_allow_html=True,
     )
 
-    # ── 데이터 로드 ──────────────────────────────────────────────────────────
-    with st.spinner("데이터 로딩 중…"):
+    _CATS = categories()
+
+    with st.spinner(t("asset.spinner")):
         df_apt  = data.load_apt_price_by_city(_APT_CITY_CODES)
         df_age  = data.load_age_population_by_city(_APT_CITY_CODES)
         df_vit  = data.load_vitality_data(_APT_CITY_CODES)
 
     if df_apt.empty or df_vit.empty:
-        st.warning("데이터가 없습니다.")
+        st.warning(t("common.no_data"))
         return
 
     df_cons = _agg_vitality_to_city(df_vit)
     df_cons = _add_consumption_share(df_cons)
 
-    # ── 기준월 스냅샷 ────────────────────────────────────────────────────────
-    # 아파트 시세: 선택월 or 가장 가까운 과거
+    # ── Snapshot for selected month ──────────────────────────────────────────
     apt_snap = (
         df_apt[df_apt["STANDARD_YEAR_MONTH"] <= selected_month]
         .sort_values("STANDARD_YEAR_MONTH")
@@ -129,7 +116,6 @@ def render(
         .reset_index()
     )
 
-    # 3개 스냅샷 병합
     snap = apt_snap.merge(
         cons_snap[["CITY_CODE"] + [c for c in cons_snap.columns if c not in apt_snap.columns]],
         on="CITY_CODE", how="left",
@@ -138,31 +124,25 @@ def render(
         on="CITY_CODE", how="left",
     )
 
-    cities = snap["CITY_KOR_NAME"].tolist()
+    _gu = t("c.gu")
 
-    # ── Section 1: KPI 카드 ──────────────────────────────────────────────────
-    st.subheader(f"구별 자산·소비 현황 ({selected_month})")
+    # ── Section 1: KPI cards ─────────────────────────────────────────────────
+    st.subheader(t("asset.section1", month=selected_month))
 
     for _, row in snap.iterrows():
         city = row["CITY_KOR_NAME"]
         color = _CITY_COLORS.get(city, "#359efa")
         meme  = row.get("AVG_MEME_PRICE", 0) or 0
         jeon  = row.get("AVG_JEONSE_PRICE", 0) or 0
-        total_sales = row.get("TOTAL_CARD_SALES", 0) or 0
 
         pop_total = row.get("POP_TOTAL", 0) or 1
         young_ratio = (
             ((row.get("POP_20S", 0) or 0) + (row.get("POP_30S", 0) or 0))
             / pop_total * 100
         )
-        senior_ratio = (
-            ((row.get("POP_60S", 0) or 0) + (row.get("POP_OVER70", 0) or 0))
-            / pop_total * 100
-        )
 
-        # 주요 소비 업종 (비중 최대)
-        top_cat = max(_CATEGORIES.keys(), key=lambda c: row.get(f"{c}_SHARE", 0) or 0)
-        top_label = _CATEGORIES[top_cat]
+        top_cat = max(_CATS.keys(), key=lambda c: row.get(f"{c}_SHARE", 0) or 0)
+        top_label = _CATS[top_cat]
         top_share = row.get(f"{top_cat}_SHARE", 0) or 0
 
         st.markdown(
@@ -172,36 +152,40 @@ def render(
             unsafe_allow_html=True,
         )
         c1, c2, c3, c4, c5 = st.columns(5)
-        c1.metric("매매가/평 (만원)", f"{meme:,.0f}")
-        c2.metric("전세가/평 (만원)", f"{jeon:,.0f}")
-        c3.metric("전세가율", f"{jeon/meme*100:.1f}%" if meme else "—")
-        c4.metric("20-30대 비중", f"{young_ratio:.1f}%")
-        c5.metric("주요 소비 업종", f"{top_label} ({top_share:.1f}%)")
+        c1.metric(t("asset.kpi_meme"), f"{meme:,.0f}")
+        c2.metric(t("asset.kpi_jeonse"), f"{jeon:,.0f}")
+        c3.metric(t("asset.kpi_ratio"), f"{jeon/meme*100:.1f}%" if meme else "—")
+        c4.metric(t("asset.kpi_young"), f"{young_ratio:.1f}%")
+        c5.metric(t("asset.kpi_top_cat"), f"{top_label} ({top_share:.1f}%)")
         st.markdown("</div></div>", unsafe_allow_html=True)
 
     st.divider()
 
-    # ── Section 2: 자산 × 소비 산점도 ────────────────────────────────────────
-    st.subheader("아파트 시세 × 업종 소비 비중 (버블 차트)")
+    # ── Section 2: Asset × spend scatter ─────────────────────────────────────
+    st.subheader(t("asset.bubble_header"))
     st.markdown(
-        "<p style='color:#989ba2;font-size:13px;margin-top:-10px'>"
-        "X축: 매매가/평(만원) · Y축: 선택 업종 소비 비중 · 버블 크기: 총 카드 매출</p>",
+        f"<p style='color:#989ba2;font-size:13px;margin-top:-10px'>"
+        f"{t('asset.bubble_desc')}</p>",
         unsafe_allow_html=True,
     )
 
     sel_cat = st.selectbox(
-        "비교 업종",
-        options=list(_CATEGORIES.keys()),
-        format_func=lambda x: _CATEGORIES[x],
+        t("asset.select_cat"),
+        options=list(_CATS.keys()),
+        format_func=lambda x: _CATS[x],
         key="asset_cat_select",
     )
 
+    _col_meme = t("asset.col_meme")
+    _col_share = t("asset.col_share")
+    _col_total = t("asset.col_total")
+
     bubble_data = snap[["CITY_KOR_NAME", "AVG_MEME_PRICE", f"{sel_cat}_SHARE", "TOTAL_CARD_SALES"]].dropna()
     bubble_data = bubble_data.rename(columns={
-        "CITY_KOR_NAME":      "구",
-        "AVG_MEME_PRICE":     "매매가_평당",
-        f"{sel_cat}_SHARE":   "소비비중",
-        "TOTAL_CARD_SALES":   "총매출",
+        "CITY_KOR_NAME":      _gu,
+        "AVG_MEME_PRICE":     _col_meme,
+        f"{sel_cat}_SHARE":   _col_share,
+        "TOTAL_CARD_SALES":   _col_total,
     })
 
     if not bubble_data.empty:
@@ -212,20 +196,20 @@ def render(
             alt.Chart(bubble_data)
             .mark_point(filled=True, opacity=0.85)
             .encode(
-                x=alt.X("매매가_평당:Q", title="아파트 매매가/평 (만원)",
+                x=alt.X(f"{_col_meme}:Q", title=t("asset.axis_meme"),
                         scale=alt.Scale(zero=False)),
-                y=alt.Y("소비비중:Q", title=f"{_CATEGORIES[sel_cat]} 소비 비중 (%)"),
-                size=alt.Size("총매출:Q", legend=None,
+                y=alt.Y(f"{_col_share}:Q", title=f"{_CATS[sel_cat]} {t('asset.spend_share')}"),
+                size=alt.Size(f"{_col_total}:Q", legend=None,
                               scale=alt.Scale(range=[800, 4000])),
                 color=alt.Color(
-                    "구:N",
+                    f"{_gu}:N",
                     scale=alt.Scale(domain=color_domain, range=color_range),
                 ),
                 tooltip=[
-                    alt.Tooltip("구:N"),
-                    alt.Tooltip("매매가_평당:Q", format=",.0f", title="매매가/평(만원)"),
-                    alt.Tooltip("소비비중:Q", format=".1f", title="소비 비중(%)"),
-                    alt.Tooltip("총매출:Q", format=",", title="총 카드매출"),
+                    alt.Tooltip(f"{_gu}:N"),
+                    alt.Tooltip(f"{_col_meme}:Q", format=",.0f", title=t("asset.tooltip_meme")),
+                    alt.Tooltip(f"{_col_share}:Q", format=".1f", title=t("asset.tooltip_share")),
+                    alt.Tooltip(f"{_col_total}:Q", format=",", title=t("asset.tooltip_total_sales")),
                 ],
             )
             .properties(height=340),
@@ -235,18 +219,21 @@ def render(
 
     st.divider()
 
-    # ── Section 3: 연령 구조 비교 (Grouped Bar) ──────────────────────────────
-    st.subheader("구별 연령 구조 비교")
+    # ── Section 3: Age structure comparison ──────────────────────────────────
+    st.subheader(t("asset.age_header"))
+
+    _age_group = t("asset.age_axis")
+    _age_ratio = t("asset.pop_ratio_axis")
 
     if not age_snap.empty:
         age_cols = {
-            "POP_UNDER20": "20세 미만",
-            "POP_20S":     "20대",
-            "POP_30S":     "30대",
-            "POP_40S":     "40대",
-            "POP_50S":     "50대",
-            "POP_60S":     "60대",
-            "POP_OVER70":  "70대 이상",
+            "POP_UNDER20": t("asset.age_under20"),
+            "POP_20S":     t("asset.age_20s"),
+            "POP_30S":     t("asset.age_30s"),
+            "POP_40S":     t("asset.age_40s"),
+            "POP_50S":     t("asset.age_50s"),
+            "POP_60S":     t("asset.age_60s"),
+            "POP_OVER70":  t("asset.age_over70"),
         }
 
         age_rows = []
@@ -256,9 +243,9 @@ def render(
             for col, label in age_cols.items():
                 val = row.get(col, 0) or 0
                 age_rows.append({
-                    "구": city,
-                    "연령대": label,
-                    "비중(%)": val / total * 100,
+                    _gu: city,
+                    _age_group: label,
+                    _age_ratio: val / total * 100,
                 })
 
         df_age_bar = pd.DataFrame(age_rows)
@@ -268,20 +255,20 @@ def render(
             alt.Chart(df_age_bar)
             .mark_bar()
             .encode(
-                x=alt.X("연령대:N", title="연령대",
+                x=alt.X(f"{_age_group}:N", title=_age_group,
                          sort=age_order,
                          axis=alt.Axis(labelAngle=0)),
-                y=alt.Y("비중(%):Q", title="인구 비중 (%)"),
+                y=alt.Y(f"{_age_ratio}:Q", title=_age_ratio),
                 color=alt.Color(
-                    "구:N",
+                    f"{_gu}:N",
                     scale=alt.Scale(domain=list(_CITY_COLORS.keys()),
                                     range=list(_CITY_COLORS.values())),
                 ),
-                xOffset=alt.XOffset("구:N"),
+                xOffset=alt.XOffset(f"{_gu}:N"),
                 tooltip=[
-                    alt.Tooltip("구:N"),
-                    alt.Tooltip("연령대:N"),
-                    alt.Tooltip("비중(%):Q", format=".1f"),
+                    alt.Tooltip(f"{_gu}:N"),
+                    alt.Tooltip(f"{_age_group}:N"),
+                    alt.Tooltip(f"{_age_ratio}:Q", format=".1f"),
                 ],
             )
             .properties(height=320),
@@ -291,41 +278,43 @@ def render(
 
     st.divider()
 
-    # ── Section 4: 소비 구성 비교 (Normalized Stacked Bar) ───────────────────
-    st.subheader("구별 업종 소비 구성 비교 (정규화)")
+    # ── Section 4: Normalized spend composition ──────────────────────────────
+    st.subheader(t("asset.comp_header"))
     st.markdown(
-        "<p style='color:#989ba2;font-size:13px;margin-top:-10px'>"
-        "동일 시점, 각 구의 총 카드 매출 기준 업종 비중. "
-        "자산 수준에 따라 소비 구성이 어떻게 달라지는지 확인합니다.</p>",
+        f"<p style='color:#989ba2;font-size:13px;margin-top:-10px'>"
+        f"{t('asset.comp_desc')}</p>",
         unsafe_allow_html=True,
     )
+
+    _cat_label = t("c.category")
+    _share_pct = t("asset.col_share_pct")
 
     comp_rows = []
     for _, row in cons_snap.iterrows():
         city = row["CITY_KOR_NAME"]
-        for col, label in _CATEGORIES.items():
+        for col, label in _CATS.items():
             share = row.get(f"{col}_SHARE", 0) or 0
-            comp_rows.append({"구": city, "업종": label, "소비비중(%)": share})
+            comp_rows.append({_gu: city, _cat_label: label, _share_pct: share})
 
     df_comp = pd.DataFrame(comp_rows)
 
     cat_colors = ["#359efa", "#7de12f", "#ff5252", "#ff9f40", "#c07df5", "#98ccfa"]
-    cat_domain = list(_CATEGORIES.values())
+    cat_domain = list(_CATS.values())
 
     comp_chart = _apply_theme(
         alt.Chart(df_comp)
         .mark_bar()
         .encode(
-            x=alt.X("구:N", title="구", axis=alt.Axis(labelAngle=0)),
-            y=alt.Y("소비비중(%):Q", title="소비 비중 (%)", stack="normalize"),
+            x=alt.X(f"{_gu}:N", title=_gu, axis=alt.Axis(labelAngle=0)),
+            y=alt.Y(f"{_share_pct}:Q", title=t("asset.spend_share"), stack="normalize"),
             color=alt.Color(
-                "업종:N",
+                f"{_cat_label}:N",
                 scale=alt.Scale(domain=cat_domain, range=cat_colors),
             ),
             tooltip=[
-                alt.Tooltip("구:N"),
-                alt.Tooltip("업종:N"),
-                alt.Tooltip("소비비중(%):Q", format=".1f"),
+                alt.Tooltip(f"{_gu}:N"),
+                alt.Tooltip(f"{_cat_label}:N"),
+                alt.Tooltip(f"{_share_pct}:Q", format=".1f"),
             ],
         )
         .properties(height=320),
@@ -335,27 +324,27 @@ def render(
 
     st.divider()
 
-    # ── Section 5: 시계열 — 매매가 vs 소비 ──────────────────────────────────
-    st.subheader("아파트 시세 × 소비 추이 비교 (정규화)")
+    # ── Section 5: Time-series — sale price vs spending ──────────────────────
+    st.subheader(t("asset.ts_header"))
     st.markdown(
-        "<p style='color:#989ba2;font-size:13px;margin-top:-10px'>"
-        "각 지표를 0~100으로 정규화. 매매가 상승/하락이 소비 패턴 변화와 동행하는지 확인합니다.</p>",
+        f"<p style='color:#989ba2;font-size:13px;margin-top:-10px'>"
+        f"{t('asset.ts_desc')}</p>",
         unsafe_allow_html=True,
     )
 
     col_ts1, col_ts2 = st.columns(2)
     with col_ts1:
         ts_city = st.selectbox(
-            "구 선택",
+            t("asset.select_gu"),
             options=apt_snap["CITY_CODE"].tolist(),
             format_func=lambda x: apt_snap.set_index("CITY_CODE").loc[x, "CITY_KOR_NAME"],
             key="asset_ts_city",
         )
     with col_ts2:
         ts_cat = st.selectbox(
-            "비교 업종",
-            options=list(_CATEGORIES.keys()),
-            format_func=lambda x: _CATEGORIES[x],
+            t("asset.select_cat"),
+            options=list(_CATS.keys()),
+            format_func=lambda x: _CATS[x],
             key="asset_ts_cat",
         )
 
@@ -367,26 +356,24 @@ def render(
         on="STANDARD_YEAR_MONTH", how="inner",
     )
 
+    _period = t("c.period")
+    _val = t("c.value")
+    _series = t("c.series")
+    _meme_label = t("asset.meme_label")
+
     if not ts_merged.empty:
         def _norm(s: pd.Series) -> pd.Series:
             mn, mx = s.min(), s.max()
             return (s - mn) / (mx - mn + 1e-9) * 100
 
-        ts_norm_rows = []
-        for _, row in ts_merged.iterrows():
-            ts_norm_rows.append({"기간": row["STANDARD_YEAR_MONTH"],
-                                  "값": None, "구분": "매매가/평"})
-            ts_norm_rows.append({"기간": row["STANDARD_YEAR_MONTH"],
-                                  "값": None, "구분": _CATEGORIES[ts_cat]})
-
         df_ts_norm = ts_merged.copy()
-        df_ts_norm["매매가_norm"] = _norm(df_ts_norm["AVG_MEME_PRICE"])
-        df_ts_norm["소비_norm"]   = _norm(df_ts_norm[ts_cat])
+        df_ts_norm["meme_norm"] = _norm(df_ts_norm["AVG_MEME_PRICE"])
+        df_ts_norm["spend_norm"]   = _norm(df_ts_norm[ts_cat])
 
         ts_rows = []
         for _, row in df_ts_norm.iterrows():
-            ts_rows.append({"기간": row["STANDARD_YEAR_MONTH"], "값": row["매매가_norm"], "구분": "매매가/평"})
-            ts_rows.append({"기간": row["STANDARD_YEAR_MONTH"], "값": row["소비_norm"],   "구분": _CATEGORIES[ts_cat]})
+            ts_rows.append({_period: row["STANDARD_YEAR_MONTH"], _val: row["meme_norm"], _series: _meme_label})
+            ts_rows.append({_period: row["STANDARD_YEAR_MONTH"], _val: row["spend_norm"],   _series: _CATS[ts_cat]})
 
         df_ts = pd.DataFrame(ts_rows)
         x_ticks = df_ts_norm["STANDARD_YEAR_MONTH"].unique()[::12].tolist()
@@ -396,30 +383,30 @@ def render(
             alt.Chart(df_ts)
             .mark_line(point=alt.OverlayMarkDef(size=20), strokeWidth=2)
             .encode(
-                x=alt.X("기간:N", title="기간",
+                x=alt.X(f"{_period}:N", title=_period,
                         axis=alt.Axis(labelAngle=-45, values=x_ticks)),
-                y=alt.Y("값:Q", title="정규화 지수 (0~100)"),
+                y=alt.Y(f"{_val}:Q", title=t("asset.norm_axis")),
                 color=alt.Color(
-                    "구분:N",
+                    f"{_series}:N",
                     scale=alt.Scale(
-                        domain=["매매가/평", _CATEGORIES[ts_cat]],
+                        domain=[_meme_label, _CATS[ts_cat]],
                         range=["#ff9f40", "#359efa"],
                     ),
                 ),
                 tooltip=[
-                    alt.Tooltip("기간:N"),
-                    alt.Tooltip("구분:N"),
-                    alt.Tooltip("값:Q", format=".1f"),
+                    alt.Tooltip(f"{_period}:N"),
+                    alt.Tooltip(f"{_series}:N"),
+                    alt.Tooltip(f"{_val}:Q", format=".1f"),
                 ],
             )
-            .properties(height=320, title=f"{city_name_ts} — 매매가 vs {_CATEGORIES[ts_cat]} 소비 추이")
+            .properties(height=320, title=f"{city_name_ts} — {_meme_label} vs {_CATS[ts_cat]}")
             .interactive(),
             dark_mode,
         )
         st.altair_chart(ts_chart, use_container_width=True)
-        st.caption("0~100 정규화 — 절대값이 아닌 추세 방향을 비교합니다")
+        st.caption(t("asset.caption_norm"))
     else:
-        st.info("시계열 데이터가 충분하지 않습니다.")
+        st.info(t("asset.no_ts_data"))
 
     st.divider()
-    st.caption("데이터 출처: 리치고 아파트 시세 · 행정안전부 주민등록 인구통계 · SPH/GRANDATA 소비 데이터")
+    st.caption(t("asset.source"))

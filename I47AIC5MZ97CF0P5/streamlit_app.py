@@ -1,8 +1,9 @@
 import streamlit as st
 
-from vitality_app import indices, sidebar
+from vitality_app import data, sidebar
+from vitality_app.sidebar import TAB_KEYS
 from vitality_app.session import get_session
-from vitality_app.tabs import map_tab, trend_tab, visitor_tab, consumer_tab, asset_tab
+from vitality_app.tabs import asset_tab, backtest_tab, consumer_tab, diagnostic_tab, report_tab, visitor_tab
 
 st.set_page_config(page_title="Urban Vitality Index", page_icon="🏙️", layout="wide")
 
@@ -79,10 +80,38 @@ _DARK_CSS = """
         border-right: 1px solid #292a2d;
     }
     section[data-testid="stSidebar"] label { color: #989ba2 !important; font-size: 12px; }
+    section[data-testid="stSidebar"] div[data-testid="stRadio"] label:has(input[type="radio"]:checked),
+    section[data-testid="stSidebar"] div[data-testid="stRadio"] label[data-checked="true"] {
+        color: #ffffff !important;
+    }
     section[data-testid="stSidebar"] h1,
     section[data-testid="stSidebar"] h2,
     section[data-testid="stSidebar"] h3 { color: #ffffff !important; }
     section[data-testid="stSidebar"] p { color: #989ba2 !important; }
+    /* theme toggle + unselected locale: dark fill, white label (primary / selected unchanged) */
+    section[data-testid="stSidebar"] [data-testid="stHorizontalBlock"]:first-of-type button[kind="secondary"] {
+        background-color: #000000 !important;
+        color: #ffffff !important;
+        border-color: #292a2d !important;
+    }
+    section[data-testid="stSidebar"] [data-testid="stHorizontalBlock"]:first-of-type button[kind="secondary"]:hover,
+    section[data-testid="stSidebar"] [data-testid="stHorizontalBlock"]:first-of-type button[kind="secondary"]:focus-visible {
+        background-color: #171719 !important;
+        color: #ffffff !important;
+        border-color: #359efa !important;
+    }
+    section[data-testid="stSidebar"] [data-testid="stHorizontalBlock"]:first-of-type button[kind="secondary"] p,
+    section[data-testid="stSidebar"] [data-testid="stHorizontalBlock"]:first-of-type button[kind="secondary"] span {
+        color: #ffffff !important;
+    }
+    /* selected locale: keep blue fill, force white label (sidebar p rule was graying it out) */
+    section[data-testid="stSidebar"] [data-testid="stHorizontalBlock"]:first-of-type button[kind="primary"] {
+        color: #ffffff !important;
+    }
+    section[data-testid="stSidebar"] [data-testid="stHorizontalBlock"]:first-of-type button[kind="primary"] p,
+    section[data-testid="stSidebar"] [data-testid="stHorizontalBlock"]:first-of-type button[kind="primary"] span {
+        color: #ffffff !important;
+    }
     /* tabs */
     [data-testid="stTabs"] button { color: #989ba2; font-size: 14px; font-weight: 500; }
     /* metric cards */
@@ -122,64 +151,34 @@ def _inject_theme(dark: bool) -> None:
 
 if "dark_mode" not in st.session_state:
     st.session_state.dark_mode = False
+st.session_state.setdefault("locale", "ko")
 
 _inject_theme(st.session_state.dark_mode)
 
 session = get_session()
 
-state = sidebar.render_sidebar()
-if state is None:
-    st.stop()
-
-indices.apply_custom_index(
-    state.df,
-    state.w_pop,
-    state.w_visit,
-    state.w_cons,
-    state.w_div,
-    state.w_inc,
-    state.w_cred,
-)
-
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["🗺️ 활력 지도", "📊 트렌드 분석", "🚇 구경꾼 동네", "📈 전입×소비", "🏠 자산×소비"])
+selected_tab = sidebar.render_sidebar()
+sidebar.render_footer()
 
 dark_mode = st.session_state.get("dark_mode", True)
 
-with tab1:
-    map_tab.render(
-        state.df,
-        state.geo_df,
-        state.selected_month,
-        state.selected_cities,
-        state.city_code_to_name,
-        dark_mode=dark_mode,
-    )
+city_df = data.load_available_cities()
+city_codes = tuple(city_df["CITY_CODE"].tolist())
+city_code_to_name = city_df.set_index("CITY_CODE")["CITY_KOR_NAME"].to_dict()
 
-with tab2:
-    trend_tab.render(state.df, state.selected_month, dark_mode=dark_mode)
+vitality_df = data.load_vitality_data(city_codes)
+months = sorted(vitality_df["STANDARD_YEAR_MONTH"].unique())
+selected_month = months[-1] if months else None
 
-with tab3:
-    visitor_tab.render(
-        tuple(state.selected_cities),
-        state.city_code_to_name,
-        state.selected_month,
-        dark_mode=dark_mode,
-    )
-
-with tab4:
-    consumer_tab.render(
-        tuple(state.selected_cities),
-        state.city_code_to_name,
-        state.selected_month,
-        dark_mode=dark_mode,
-    )
-
-with tab5:
-    asset_tab.render(
-        tuple(state.selected_cities),
-        state.city_code_to_name,
-        state.selected_month,
-        dark_mode=dark_mode,
-    )
-
-sidebar.render_footer()
+if selected_tab == TAB_KEYS[0]:
+    visitor_tab.render(city_codes, city_code_to_name, selected_month, dark_mode=dark_mode)
+elif selected_tab == TAB_KEYS[1]:
+    consumer_tab.render(city_codes, city_code_to_name, selected_month, dark_mode=dark_mode)
+elif selected_tab == TAB_KEYS[2]:
+    asset_tab.render(city_codes, city_code_to_name, selected_month, dark_mode=dark_mode)
+elif selected_tab == TAB_KEYS[3]:
+    report_tab.render(city_codes, city_code_to_name, selected_month, dark_mode=dark_mode)
+elif selected_tab == TAB_KEYS[4]:
+    backtest_tab.render(city_codes, city_code_to_name, selected_month, dark_mode=dark_mode)
+elif selected_tab == TAB_KEYS[5]:
+    diagnostic_tab.render(city_codes, city_code_to_name, selected_month, dark_mode=dark_mode)
