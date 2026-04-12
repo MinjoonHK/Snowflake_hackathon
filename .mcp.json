@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "urban-vitality-local": {
+      "command": "python",
+      "args": ["mcp_server.py"],
+      "env": {},
+      "cwd": "c:\\github\\snowflake-hackathon"
+    },
+    "urban-vitality-snowflake": {
+      "type": "url",
+      "url": "https://niuqbrk-mh52868.snowflakecomputing.com/api/v2/databases/SPH_DATA/schemas/GRANDATA/mcp-servers/URBAN_VITALITY_MCP/sse"
+    }
+  }
+}

@@ -1,7 +1,7 @@
-# Urban Vitality Index — Streamlit Project
+# 서울 3대 상업지구 자영업 상권분석 플랫폼 — Streamlit Project
 
 ## Project Overview
-Snowflake Hackathon project. A Streamlit dashboard that visualizes Seoul's urban vitality index using data from Snowflake (SPH/GRANDATA).
+Snowflake Hackathon project. **서울 3대 상업지구 자영업 상권분석 플랫폼** — a Streamlit dashboard for self-employed retail trade-area and location insight, powered by Snowflake (SPH/GRANDATA) and vitality-index metrics from `V_VITALITY_FINAL`.
 
 ## Tech Stack
 - **Frontend**: Streamlit (Python)

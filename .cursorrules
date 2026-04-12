@@ -1,7 +1,7 @@
-# Cursor Rules — Urban Vitality Index (Streamlit + Snowflake)
+# Cursor Rules — 서울 3대 상업지구 자영업 상권분석 플랫폼 (Streamlit + Snowflake)
 
 ## Project Context
-Streamlit dashboard for Seoul urban vitality analysis. Data lives in Snowflake (SPH_DATA.GRANDATA). Korean-facing UI. Entry point: `I47AIC5MZ97CF0P5/streamlit_app.py`.
+Streamlit dashboard for Seoul’s three major commercial districts — self-employed retail trade-area and location analysis. Data lives in Snowflake (SPH_DATA.GRANDATA). Korean-facing UI. Entry point: `I47AIC5MZ97CF0P5/streamlit_app.py`.
 
 ## Design System Tokens
 

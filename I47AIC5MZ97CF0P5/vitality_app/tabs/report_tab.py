@@ -207,13 +207,13 @@ def _template_report(business_type: str, category_col: str, top5: pd.DataFrame) 
 
         strengths: list[str] = []
         if row["pct_category"] >= 70:
-            strengths.append(t("report.tpl_str_cat", cat=cat_label_val, p=f"{row['pct_category']:.0f}"))
+            strengths.append(t("report.tpl_str_cat", cat=cat_label_val, p=f"{max(1, round(100 - row['pct_category']))}"))
         if row["pct_visiting"] >= 70:
-            strengths.append(t("report.tpl_str_traffic", p=f"{row['pct_visiting']:.0f}"))
+            strengths.append(t("report.tpl_str_traffic", p=f"{max(1, round(100 - row['pct_visiting']))}"))
         if row["pct_income"] >= 70:
-            strengths.append(t("report.tpl_str_income", p=f"{row['pct_income']:.0f}"))
+            strengths.append(t("report.tpl_str_income", p=f"{max(1, round(100 - row['pct_income']))}"))
         if row["pct_population"] >= 70:
-            strengths.append(t("report.tpl_str_population", p=f"{row['pct_population']:.0f}"))
+            strengths.append(t("report.tpl_str_population", p=f"{max(1, round(100 - row['pct_population']))}"))
         if row["MOM_CHANGE_PCT"] > 0:
             strengths.append(t("report.tpl_str_growth", p=f"{row['MOM_CHANGE_PCT']:.1f}"))
 
@@ -228,7 +228,7 @@ def _template_report(business_type: str, category_col: str, top5: pd.DataFrame) 
             cautions.append(t("report.tpl_cau_diversity"))
 
         _v_vit = f"{row['VITALITY_INDEX']:.1f}"
-        _v_cat = f"{row['pct_category']:.0f}"
+        _v_cat = f"{max(1, round(100 - row['pct_category']))}"
         _v_vis = f"{row['TOTAL_VISITING']:,.0f}"
         _v_sales = f"{row['TOTAL_CARD_SALES']:,.0f}"
 
@@ -251,8 +251,8 @@ def _template_report(business_type: str, category_col: str, top5: pd.DataFrame) 
     lines.append(
         t("report.tpl_conclusion_text",
           city=best["CITY_KOR_NAME"], district=best["DISTRICT_KOR_NAME"],
-          cat=cat_label_val, cat_p=f"{best['pct_category']:.0f}",
-          vis_p=f"{best['pct_visiting']:.0f}", biz=business_type)
+          cat=cat_label_val, cat_p=f"{max(1, round(100 - best['pct_category']))}",
+          vis_p=f"{max(1, round(100 - best['pct_visiting']))}", biz=business_type)
     )
     return "\n".join(lines)
 
@@ -361,7 +361,7 @@ def render(
     k1, k2, k3, k4 = st.columns(4)
     k1.metric(t("report.kpi_top1"), f"{best['CITY_KOR_NAME']} {best['DISTRICT_KOR_NAME']}")
     k2.metric(t("report.kpi_score"), f"{best['TOTAL_SCORE']:.1f}")
-    k3.metric(f"{cat_label_val} {t('c.percentile')}", f"{best['pct_category']:.0f}")
+    k3.metric(f"{cat_label_val} {t('c.percentile')}", f"상위 {max(1, round(100 - best['pct_category']))}%")
     k4.metric(t("report.kpi_vitality"), f"{best['VITALITY_INDEX']:.1f}", f"{best['MOM_CHANGE_PCT']:+.1f}%")
 
     st.divider()

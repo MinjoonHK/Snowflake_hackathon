@@ -5,7 +5,11 @@ from vitality_app.sidebar import TAB_KEYS
 from vitality_app.session import get_session
 from vitality_app.tabs import asset_tab, backtest_tab, consumer_tab, diagnostic_tab, report_tab, visitor_tab
 
-st.set_page_config(page_title="Urban Vitality Index", page_icon="🏙️", layout="wide")
+st.set_page_config(
+    page_title="서울 3대 상업지구 자영업 상권분석 플랫폼",
+    page_icon="🏙️",
+    layout="wide",
+)
 
 _COMMON_CSS = """
     html, body, [data-testid="stAppViewContainer"], [data-testid="stMain"] {

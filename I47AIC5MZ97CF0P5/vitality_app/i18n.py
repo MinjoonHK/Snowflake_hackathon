@@ -32,12 +32,12 @@ MESSAGES: dict[str, dict[str, str]] = {
 
     # ── Sidebar ─────────────────────────────────────────────────────────────
     "sidebar.title": {
-        "ko": "### 🏙️ Urban Vitality Index",
-        "en": "### 🏙️ Urban Vitality Index",
+        "ko": "### 🏙️ 서울 3대 상업지구 자영업 상권분석 플랫폼",
+        "en": "### 🏙️ Seoul 3 major commercial districts — SME retail trade-area analytics",
     },
     "sidebar.tagline": {
-        "ko": "서울 도시 활력 분석 플랫폼",
-        "en": "Seoul urban vitality analytics platform",
+        "ko": "유동·소비·자산 데이터 기반 자영업 입지·상권 인사이트",
+        "en": "Foot traffic, spend, and asset data for SME location and trade-area insight",
     },
 
     # ── Footer ──────────────────────────────────────────────────────────────
@@ -547,26 +547,26 @@ MESSAGES: dict[str, dict[str, str]] = {
     "report.tpl_score": {"ko": "종합 점수: {v}점", "en": "Overall score: {v}"},
     "report.tpl_vitality": {"ko": "활력지수: {v}", "en": "Vitality index: {v}"},
     "report.tpl_cat_pct": {
-        "ko": "{cat} 매출 백분위: {v}",
-        "en": "{cat} sales percentile: {v}",
+        "ko": "{cat} 매출: 상위 {v}%",
+        "en": "{cat} sales: top {v}%",
     },
     "report.tpl_visitors": {"ko": "방문인구: {v}명", "en": "Visitors: {v}"},
     "report.tpl_total_sales": {"ko": "총 카드매출: {v}원", "en": "Total card sales: {v} KRW"},
     "report.tpl_str_cat": {
-        "ko": "**{cat} 매출 상위권** (백분위 {p})",
-        "en": "**Top {cat} sales** (percentile {p})",
+        "ko": "**{cat} 매출 상위 {p}%**",
+        "en": "**Top {p}% in {cat} sales**",
     },
     "report.tpl_str_traffic": {
-        "ko": "**높은 유동인구** (백분위 {p})",
-        "en": "**High foot traffic** (percentile {p})",
+        "ko": "**유동인구 상위 {p}%**",
+        "en": "**Top {p}% foot traffic**",
     },
     "report.tpl_str_income": {
-        "ko": "**높은 소득 수준** (백분위 {p})",
-        "en": "**High income level** (percentile {p})",
+        "ko": "**소득 수준 상위 {p}%**",
+        "en": "**Top {p}% income level**",
     },
     "report.tpl_str_population": {
-        "ko": "**풍부한 거주인구** (백분위 {p})",
-        "en": "**Large residential population** (percentile {p})",
+        "ko": "**거주인구 상위 {p}%**",
+        "en": "**Top {p}% residential population**",
     },
     "report.tpl_str_growth": {
         "ko": "**성장세** (전월 대비 +{p}%)",
@@ -594,14 +594,14 @@ MESSAGES: dict[str, dict[str, str]] = {
     "report.tpl_conclusion_text": {
         "ko": (
             "{city} {district}은(는) "
-            "{cat} 매출 백분위 {cat_p}, "
-            "방문인구 백분위 {vis_p}으로 "
+            "{cat} 매출 상위 {cat_p}%, "
+            "방문인구 상위 {vis_p}%로 "
             "**{biz}** 창업에 가장 유리한 입지로 분석됩니다."
         ),
         "en": (
-            "{city} {district} ranks at "
-            "{cat} sales percentile {cat_p} and "
-            "visitor percentile {vis_p}, making it "
+            "{city} {district} ranks in the "
+            "top {cat_p}% for {cat} sales and "
+            "top {vis_p}% for visitors, making it "
             "the strongest location for a **{biz}** startup."
         ),
     },

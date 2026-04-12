@@ -11,7 +11,7 @@ _AI_MESSAGES = {
     },
     "ai.system_prompt": {
         "ko": (
-            "당신은 서울시 도시 활력 분석 전문 AI 컨설턴트입니다.\n"
+            "당신은 「서울 3대 상업지구 자영업 상권분석 플랫폼」을 위한 전문 AI 컨설턴트입니다.\n"
             "아래 데이터를 기반으로 질문에 답변하세요.\n\n"
             "[데이터 기간]: 2021년 1월 ~ 2025년 12월\n"
             "[분석 대상]: 서울시 {cities}의 법정동\n"
@@ -24,7 +24,8 @@ _AI_MESSAGES = {
             "- 한국어로 답변하세요"
         ),
         "en": (
-            "You are an AI consultant specializing in Seoul urban vitality analysis.\n"
+            "You are an AI consultant for Seoul's three major commercial districts — "
+            "SME retail trade-area and vitality analysis.\n"
             "Answer questions based on the data below.\n\n"
             "[Data period]: Jan 2021 – Dec 2025\n"
             "[Scope]: Seoul districts in {cities}\n"
